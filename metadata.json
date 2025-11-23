@@ -1,0 +1,7 @@
+{
+  "name": "CleanManager Pro",
+  "description": "Plateforme de gestion d'interventions de nettoyage (SaaS) avec rôles Admin, Client et Prestataire.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
