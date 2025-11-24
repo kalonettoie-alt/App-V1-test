@@ -5,12 +5,9 @@ import {
   LayoutDashboard, 
   Home, 
   Calendar, 
-  Settings, 
   LogOut, 
   Briefcase, 
   CheckSquare,
-  Menu,
-  X,
   Users,
   HardHat
 } from 'lucide-react';
@@ -166,8 +163,7 @@ const BottomNav = ({ user }: { user: any }) => {
 // --- Main Layout Container ---
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, signOut } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-
+  
   if (!user) return <>{children}</>;
 
   return (

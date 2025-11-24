@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Search, Filter, Eye, MapPin, Loader2, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { supabase } from '../../services/supabase';

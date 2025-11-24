@@ -1,6 +1,5 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
-import { Calendar, MapPin, Clock, CheckCircle, Loader2, AlertCircle, Camera, Upload, X, Image as ImageIcon, Eye, Home, Key } from 'lucide-react';
+import { Calendar, MapPin, Clock, CheckCircle, Loader2, AlertCircle, Camera, Upload, X, Home, Key } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { InterventionStatus } from '../../types';
@@ -546,7 +545,7 @@ const ProviderDashboard = () => {
                     </div>
                   ))}
                   
-                  <label className="aspect-square rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all text-gray-400 hover:text-blue-600">
+                  <label className="aspect-square rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all text-gray-400 hover:text-blue-600">
                     <Upload className="w-6 h-6 mb-1" />
                     <span className="text-xs font-medium">Ajouter</span>
                     <input 
@@ -555,35 +554,34 @@ const ProviderDashboard = () => {
                       multiple
                       onChange={(e) => handleFileChange(e, 'general')}
                       className="hidden"
-                      id="general-upload"
                     />
                   </label>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-gray-100 flex gap-3">
+              {/* Actions */}
+              <div className="pt-4 flex gap-3 border-t border-gray-100">
                 <button 
                   type="button" 
                   onClick={() => setIsReportModalOpen(false)}
-                  className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
                 >
                   Annuler
                 </button>
                 <button 
                   type="submit"
                   disabled={submittingReport}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex justify-center items-center gap-2 disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex justify-center items-center gap-2 disabled:opacity-50"
                 >
                   {submittingReport ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" /> Envoi...
                     </>
                   ) : (
-                    'Envoyer & Terminer'
+                    'Envoyer le rapport'
                   )}
                 </button>
               </div>
-
             </form>
           </div>
         </div>

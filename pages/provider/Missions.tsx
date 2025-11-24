@@ -1,7 +1,6 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Calendar, MapPin, Clock, CheckCircle, Loader2, AlertCircle, Eye, X, Home, Key } from 'lucide-react';
+import { Calendar, MapPin, Clock, Loader2, AlertCircle, Eye, X, Home, Key } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { InterventionStatus } from '../../types';

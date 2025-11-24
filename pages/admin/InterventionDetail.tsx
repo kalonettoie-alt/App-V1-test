@@ -1,7 +1,6 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, MapPin, User, CreditCard, Clock, AlertCircle, Save, Loader2, CheckCircle, FileText, Image as ImageIcon, XCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, User, CreditCard, AlertCircle, Save, Loader2, CheckCircle, FileText, Image as ImageIcon, XCircle } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { InterventionStatus } from '../../types';
 
@@ -104,7 +103,7 @@ const AdminInterventionDetail = () => {
           .eq('id', id)
           .single();
           
-      setIntervention(prev => ({...prev, ...data}));
+      setIntervention((prev: any) => ({...prev, ...data}));
       
       // Message de succès avec auto-hide
       setSuccessMessage("Modifications enregistrées avec succès !");
