@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Profile, UserRole } from '../types';
 import { supabase } from '../services/supabase';
 
@@ -15,6 +15,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
   // Fonction pour récupérer le profil complet
   const fetchProfile = async (userId: string) => {
@@ -34,33 +35,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Fonction d'auto-réparation : Crée le profil s'il manque
   const createProfileIfMissing = async (sessionUser: any) => {
-    console.log("Tentative de création du profil manquant pour :", sessionUser.id);
-    
-    const newProfileDb = {
-      id: sessionUser.id,
-      full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Utilisateur',
-      role: (sessionUser.user_metadata?.role as UserRole) || UserRole.CLIENT,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    try {
+        const newProfileDb = {
+        id: sessionUser.id,
+        full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Utilisateur',
+        role: (sessionUser.user_metadata?.role as UserRole) || UserRole.CLIENT,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+        };
 
-    const { error } = await supabase.from('profiles').insert([newProfileDb]);
+        const { error } = await supabase.from('profiles').insert([newProfileDb]);
 
-    if (error) {
-      console.error("ERREUR CRITIQUE DB:", JSON.stringify(error, null, 2));
-      return null;
+        if (error) {
+           console.error("Erreur création profil auto:", error);
+           return null;
+        }
+
+        return { ...newProfileDb, email: sessionUser.email } as Profile;
+    } catch (e) {
+        console.error("Exception création profil:", e);
+        return null;
     }
-
-    console.log("Profil créé avec succès !");
-    return { ...newProfileDb, email: sessionUser.email } as Profile;
   };
 
-  const handleSession = async (session: any) => {
+  // Logique centralisée de gestion de session
+  const processSession = async (session: any) => {
     if (!session?.user) {
-      setUser(null);
-      // Ne pas mettre setLoading(false) ici car cela pourrait causer un flash, 
-      // on laisse l'appelant gérer la fin du chargement si nécessaire, 
-      // ou le useEffect initial.
+      if (mountedRef.current) setUser(null);
       return;
     }
 
@@ -74,57 +75,70 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // 3. Mettre à jour l'état
-      if (profile) {
+      if (profile && mountedRef.current) {
         if (!profile.email && session.user.email) {
           profile.email = session.user.email;
         }
         setUser(profile);
-      } else {
-        console.error("Profil introuvable et création échouée.");
-        await supabase.auth.signOut();
+      } else if (mountedRef.current) {
+        // Fallback si échec critique profil
+        console.warn("Profil introuvable malgré tentative de création.");
         setUser(null);
       }
     } catch (error) {
-      console.error("Erreur inattendue dans handleSession:", error);
+      console.error("Erreur processSession:", error);
+      if (mountedRef.current) setUser(null);
     }
-    // Note: On ne met pas setLoading(false) ici pour éviter les conflits d'état 
-    // avec les blocs finally des fonctions signIn/signUp
   };
 
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
+    let authListener: any = null;
 
-    const init = async () => {
+    const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (mounted) {
-            if (session) {
-                await handleSession(session);
-            }
-            setLoading(false);
+        // 1. Récupérer la session initiale
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) throw error;
+        
+        if (session) {
+            await processSession(session);
         }
-      } catch (e) {
-        console.error("Erreur init auth:", e);
-        if (mounted) setLoading(false);
+      } catch (error) {
+        console.error("Erreur init auth:", error);
+      } finally {
+        if (mountedRef.current) setLoading(false);
       }
     };
 
-    init();
+    // Timeout de sécurité : Force la fin du chargement après 2 secondes 
+    // si Supabase ne répond pas (ex: réseau lent ou bug interne)
+    const safetyTimeout = setTimeout(() => {
+        if (loading && mountedRef.current) {
+            console.warn("Auth: Safety Timeout triggered");
+            setLoading(false);
+        }
+    }, 2000);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth Event:", event);
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-        await handleSession(session);
-        if (mounted) setLoading(false);
+    initializeAuth();
+
+    // Abonnement aux changements
+    const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        await processSession(session);
       } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        if (mounted) setLoading(false);
+        if (mountedRef.current) setUser(null);
       }
+      // On s'assure que le loading est désactivé après un event
+      if (mountedRef.current) setLoading(false);
     });
+    authListener = data;
 
     return () => {
-      mounted = false;
-      subscription.unsubscribe();
+      mountedRef.current = false;
+      clearTimeout(safetyTimeout);
+      if (authListener) authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -136,20 +150,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             password,
         });
         
-        if (error) {
-            console.error("Erreur Login:", error.message);
-            return { error };
-        } 
+        if (error) return { error };
         
         if (data.session) {
-            await handleSession(data.session);
+            await processSession(data.session);
         }
         return { error: null };
     } catch (err: any) {
         return { error: err };
     } finally {
-        // CRUCIAL: Toujours arrêter le chargement, quoi qu'il arrive
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -167,19 +177,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
         });
 
-        if (error) {
-            console.error("Erreur Inscription:", error.message);
-            return { error, data };
-        } 
+        if (error) return { error, data };
         
         if (data.session) {
-            await handleSession(data.session);
+            await processSession(data.session);
         }
         return { error: null, data };
     } catch (err: any) {
         return { error: err, data: null };
     } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
     }
   };
 
@@ -187,9 +194,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(true);
     try {
         await supabase.auth.signOut();
-        setUser(null);
+        if (mountedRef.current) setUser(null);
     } finally {
-        setLoading(false);
+        if (mountedRef.current) setLoading(false);
     }
   };
 
