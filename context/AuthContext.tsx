@@ -33,18 +33,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  // Fonction d'auto-réparation : Crée le profil s'il manque
+  // Fonction d'auto-réparation : Crée le profil s'il manque (Utilise UPSERT pour éviter les doublons)
   const createProfileIfMissing = async (sessionUser: any) => {
     try {
         const newProfileDb = {
-        id: sessionUser.id,
-        full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Utilisateur',
-        role: (sessionUser.user_metadata?.role as UserRole) || UserRole.CLIENT,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+          id: sessionUser.id,
+          full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Utilisateur',
+          role: (sessionUser.user_metadata?.role as UserRole) || UserRole.CLIENT,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
         };
 
-        const { error } = await supabase.from('profiles').insert([newProfileDb]);
+        // Utilisation de UPSERT au lieu de INSERT
+        // Cela met à jour si ça existe, ou crée si ça n'existe pas. Beaucoup plus robuste.
+        const { error } = await supabase.from('profiles').upsert([newProfileDb], { onConflict: 'id' });
 
         if (error) {
            console.error("Erreur création profil auto:", error);
@@ -75,19 +77,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // 3. Mettre à jour l'état
-      if (profile && mountedRef.current) {
-        if (!profile.email && session.user.email) {
-          profile.email = session.user.email;
+      if (mountedRef.current) {
+        if (profile) {
+          // Cas Idéal : On a le profil de la base de données
+          if (!profile.email && session.user.email) {
+            profile.email = session.user.email;
+          }
+          setUser(profile);
+        } else {
+          // CAS DE SECOURS (FALLBACK) : La base de données ne répond pas ou erreur RLS
+          // On construit un profil temporaire avec les infos de la session pour ne pas bloquer l'utilisateur
+          console.warn("⚠️ Utilisation du profil de secours (Session Only)");
+          
+          const fallbackProfile: Profile = {
+            id: session.user.id,
+            email: session.user.email || '',
+            role: (session.user.user_metadata?.role as UserRole) || UserRole.CLIENT,
+            full_name: session.user.user_metadata?.full_name || 'Utilisateur',
+            avatar_url: ''
+          };
+          
+          setUser(fallbackProfile);
         }
-        setUser(profile);
-      } else if (mountedRef.current) {
-        // Fallback si échec critique profil
-        console.warn("Profil introuvable malgré tentative de création.");
-        setUser(null);
       }
     } catch (error) {
       console.error("Erreur processSession:", error);
-      if (mountedRef.current) setUser(null);
+      // Même en cas d'erreur grave, on essaie de ne pas déconnecter l'utilisateur si la session est là
+      if (mountedRef.current && session.user) {
+         setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            role: (session.user.user_metadata?.role as UserRole) || UserRole.CLIENT,
+            full_name: 'Mode Secours'
+         });
+      } else if (mountedRef.current) {
+        setUser(null);
+      }
     }
   };
 
