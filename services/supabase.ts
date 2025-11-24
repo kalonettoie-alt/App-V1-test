@@ -9,6 +9,14 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("ERREUR CRITIQUE : Clés Supabase manquantes.");
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Ajout des options d'authentification pour forcer la persistance (localStorage)
+// C'est crucial pour les PWA mobiles
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 export type SupabaseClient = typeof supabase;

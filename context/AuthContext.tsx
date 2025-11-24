@@ -36,8 +36,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const createProfileIfMissing = async (sessionUser: any) => {
     console.log("Tentative de création du profil manquant pour :", sessionUser.id);
     
-    // NOTE : On n'inclut PAS 'email' ici car la colonne n'existe souvent pas dans le schéma SQL initial.
-    // L'email est géré via Supabase Auth et réinjecté localement ensuite.
     const newProfileDb = {
       id: sessionUser.id,
       full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Utilisateur',
@@ -46,25 +44,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       updated_at: new Date().toISOString()
     };
 
-    // 1. Tenter l'insertion
     const { error } = await supabase.from('profiles').insert([newProfileDb]);
 
     if (error) {
-      // Log détaillé de l'erreur (converti en string pour être lisible)
       console.error("ERREUR CRITIQUE DB:", JSON.stringify(error, null, 2));
-      console.error("Solution probable : Vérifiez que la Policy RLS 'INSERT' est bien activée sur la table 'profiles'.");
       return null;
     }
 
     console.log("Profil créé avec succès !");
-    // On retourne l'objet combiné (DB + Email session)
     return { ...newProfileDb, email: sessionUser.email } as Profile;
   };
 
   const handleSession = async (session: any) => {
     if (!session?.user) {
       setUser(null);
-      setLoading(false);
+      // Ne pas mettre setLoading(false) ici car cela pourrait causer un flash, 
+      // on laisse l'appelant gérer la fin du chargement si nécessaire, 
+      // ou le useEffect initial.
       return;
     }
 
@@ -79,92 +75,122 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // 3. Mettre à jour l'état
       if (profile) {
-        // Si le profil DB n'a pas d'email (cas fréquent), on injecte celui de la session
         if (!profile.email && session.user.email) {
           profile.email = session.user.email;
         }
         setUser(profile);
       } else {
-        // Cas critique : Auth OK mais impossible d'avoir un profil (bloqué par RLS)
         console.error("Profil introuvable et création échouée.");
-        alert("Erreur de configuration : Votre compte est créé mais le profil de données n'a pas pu être généré. Vérifiez la console pour l'erreur exacte (souvent un problème de droits RLS).");
         await supabase.auth.signOut();
         setUser(null);
       }
     } catch (error) {
       console.error("Erreur inattendue dans handleSession:", error);
-    } finally {
-      setLoading(false);
     }
+    // Note: On ne met pas setLoading(false) ici pour éviter les conflits d'état 
+    // avec les blocs finally des fonctions signIn/signUp
   };
 
   useEffect(() => {
-    // Initialisation
+    let mounted = true;
+
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      await handleSession(session);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+            if (session) {
+                await handleSession(session);
+            }
+            setLoading(false);
+        }
+      } catch (e) {
+        console.error("Erreur init auth:", e);
+        if (mounted) setLoading(false);
+      }
     };
+
     init();
 
-    // Écouteur de changements
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth Event:", event);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
         await handleSession(session);
-      } else if (_event === 'SIGNED_OUT') {
+        if (mounted) setLoading(false);
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    if (error) {
-        console.error("Erreur Login:", error.message);
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+        
+        if (error) {
+            console.error("Erreur Login:", error.message);
+            return { error };
+        } 
+        
+        if (data.session) {
+            await handleSession(data.session);
+        }
+        return { error: null };
+    } catch (err: any) {
+        return { error: err };
+    } finally {
+        // CRUCIAL: Toujours arrêter le chargement, quoi qu'il arrive
         setLoading(false);
-    } else if (data.session) {
-        await handleSession(data.session);
     }
-    return { error };
   };
 
   const signUp = async (email: string, password: string, fullName: string, role: string) => {
     setLoading(true);
-    console.log("Inscription en cours...", { email, role });
-    
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role: role
+    try {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                full_name: fullName,
+                role: role
+                }
+            }
+        });
+
+        if (error) {
+            console.error("Erreur Inscription:", error.message);
+            return { error, data };
+        } 
+        
+        if (data.session) {
+            await handleSession(data.session);
         }
-      }
-    });
-
-    if (error) {
-        console.error("Erreur Inscription:", error.message);
+        return { error: null, data };
+    } catch (err: any) {
+        return { error: err, data: null };
+    } finally {
         setLoading(false);
-    } else if (data.session) {
-        await handleSession(data.session);
     }
-
-    return { data, error };
   };
 
   const signOut = async () => {
     setLoading(true);
-    await supabase.auth.signOut();
-    setUser(null);
-    setLoading(false);
+    try {
+        await supabase.auth.signOut();
+        setUser(null);
+    } finally {
+        setLoading(false);
+    }
   };
 
   return (
