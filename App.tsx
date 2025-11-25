@@ -1,4 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+
+import React from 'react';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { UserRole } from './types';
 import Login from './pages/Login';
@@ -14,7 +16,6 @@ import ProviderDashboard from './pages/provider/ProviderDashboard';
 import ProviderMissions from './pages/provider/Missions';
 import ProviderPlanning from './pages/provider/Planning';
 import { Layout } from './components/Layout';
-import { Toaster } from 'sonner';
 
 // Guard Component to protect routes based on roles
 const ProtectedRoute = ({ children, allowedRoles }: { children?: React.ReactNode, allowedRoles: UserRole[] }) => {
@@ -97,7 +98,6 @@ const App = () => {
   return (
     <AuthProvider>
       <Router>
-        <Toaster position="top-right" richColors />
         <AppRoutes />
       </Router>
     </AuthProvider>

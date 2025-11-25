@@ -1,10 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Calendar, MapPin, Clock, CheckCircle, Loader2, AlertCircle, Camera, Upload, X, Home, Key } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { InterventionStatus } from '../../types';
-import { toast } from 'sonner';
-import imageCompression from 'browser-image-compression';
 
 const ProviderDashboard = () => {
   const { user } = useAuth();
@@ -79,7 +77,6 @@ const ProviderDashboard = () => {
 
     } catch (error) {
       console.error('Erreur chargement missions:', error);
-      toast.error('Erreur lors du chargement des missions');
     }
   }, [user?.id]);
 
@@ -129,10 +126,9 @@ const ProviderDashboard = () => {
       if (error) throw error;
       // Rafraîchir les données sans remettre le loading global
       await fetchMissions();
-      toast.success('Statut mis à jour');
     } catch (error) {
       console.error('Erreur mise à jour statut:', error);
-      toast.error('Impossible de mettre à jour le statut');
+      alert("Impossible de mettre à jour le statut.");
     }
   };
 
@@ -141,43 +137,17 @@ const ProviderDashboard = () => {
     setDetailModalOpen(true);
   };
 
-  // Gestion des fichiers photos avec compression
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'general' | 'degats') => {
+  // Gestion des fichiers photos
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'general' | 'degats') => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files);
-      
-      try {
-        // ✅ COMPRESSION AVANT STOCKAGE
-        const loadingToast = toast.loading('Compression des photos...');
-        const compressedFiles = await Promise.all(
-          newFiles.map(async (file) => {
-            try {
-              const compressed = await imageCompression(file, {
-                maxSizeMB: 0.5,          // 500 KB max par photo
-                maxWidthOrHeight: 1920,  // Full HD maximum
-                useWebWorker: true,
-                fileType: 'image/jpeg'   // Force JPEG pour compatibilité
-              });
-              return compressed;
-            } catch (err) {
-              console.error('Erreur compression:', err);
-              return file; // Fallback sur fichier original si échec
-            }
-          })
-        );
-        toast.dismiss(loadingToast);
-        
-        setReportData(prev => ({
-          ...prev,
-          [type === 'general' ? 'photos' : 'degats_photos']: [
-            ...(type === 'general' ? prev.photos : prev.degats_photos),
-            ...compressedFiles
-          ]
-        }));
-      } catch (error) {
-        console.error('Erreur traitement photos:', error);
-        toast.error('Erreur lors du traitement des photos');
-      }
+      setReportData(prev => ({
+        ...prev,
+        [type === 'general' ? 'photos' : 'degats_photos']: [
+          ...(type === 'general' ? prev.photos : prev.degats_photos),
+          ...newFiles
+        ]
+      }));
     }
   };
 
@@ -193,17 +163,17 @@ const ProviderDashboard = () => {
     e.preventDefault();
     
     if (reportData.photos.length === 0) {
-      toast.error("Veuillez ajouter au moins une photo prouvant la fin de la mission.");
+      alert("Veuillez ajouter au moins une photo prouvant la fin de la mission.");
       return;
     }
 
     if (reportData.degats_signales) {
       if (!reportData.degats_description.trim()) {
-        toast.error("Veuillez décrire les dégâts signalés.");
+        alert("Veuillez décrire les dégâts signalés.");
         return;
       }
       if (reportData.degats_photos.length === 0) {
-        toast.error("Veuillez ajouter au moins une photo des dégâts signalés.");
+        alert("Veuillez ajouter au moins une photo des dégâts signalés.");
         return;
       }
     }
@@ -268,11 +238,10 @@ const ProviderDashboard = () => {
 
       setIsReportModalOpen(false);
       await fetchMissions();
-      toast.success('Rapport envoyé et mission terminée !');
 
     } catch (error: any) {
       console.error("Erreur rapport:", error);
-      toast.error("Erreur rapport: " + error.message);
+      alert("Une erreur est survenue lors de l'envoi du rapport : " + error.message);
     } finally {
       setSubmittingReport(false);
     }

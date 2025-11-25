@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { HardHat, Search, Loader2, Mail, Phone, Building, Edit, Save, X, TrendingUp, CheckCircle, Eye, Euro } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { InterventionStatus } from '../../types';
@@ -19,24 +20,30 @@ const AdminPrestataires = () => {
   const fetchPrestataires = async () => {
     setLoading(true);
     try {
-      // ✅ UNE SEULE REQUÊTE avec jointure pour éviter le N+1
-      const { data: prestData, error } = await supabase
+      // ÉTAPE 1 : Récupérer les profils Prestataires (Requête simple)
+      const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          interventions:interventions(
-            id,
-            status,
-            prix_prestataire_ht
-          )
-        `)
+        .select('*')
         .eq('role', 'prestataire')
         .order('full_name', { ascending: true });
 
-      if (error) throw error;
+      if (profilesError) throw profilesError;
 
-      const enrichedData = (prestData || []).map((p: any) => {
-        const myInterventions = p.interventions || [];
+      // ÉTAPE 2 : Récupérer toutes les interventions (Requête simple)
+      // On ne filtre pas ici pour éviter la complexité, on filtrera en JS
+      const { data: interventionsData, error: interventionsError } = await supabase
+        .from('interventions')
+        .select('id, status, prix_prestataire_ht, prestataire_id');
+
+      if (interventionsError) throw interventionsError;
+
+      const allInterventions = interventionsData || [];
+
+      // ÉTAPE 3 : Fusionner les données en JavaScript
+      const enrichedData = (profilesData || []).map(p => {
+        // Filtrer les interventions pour ce prestataire spécifique
+        const myInterventions = allInterventions.filter((i: any) => i.prestataire_id === p.id);
+        
         const totalMissions = myInterventions.length;
         const completedMissions = myInterventions.filter((i: any) => i.status === InterventionStatus.TERMINEE).length;
         
@@ -46,7 +53,11 @@ const AdminPrestataires = () => {
 
         return {
           ...p,
-          stats: { totalMissions, completedMissions, revenue }
+          stats: {
+            totalMissions,
+            completedMissions,
+            revenue
+          }
         };
       });
 

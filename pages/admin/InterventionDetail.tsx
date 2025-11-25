@@ -3,8 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, MapPin, User, CreditCard, AlertCircle, Save, Loader2, CheckCircle, FileText, Image as ImageIcon, XCircle } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { InterventionStatus } from '../../types';
-import { toast } from 'sonner';
-import { logAction } from '../../services/audit';
 
 const AdminInterventionDetail = () => {
   const { id } = useParams();
@@ -19,6 +17,7 @@ const AdminInterventionDetail = () => {
   const [status, setStatus] = useState<InterventionStatus | ''>('');
   const [prestataireId, setPrestataireId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -70,8 +69,8 @@ const AdminInterventionDetail = () => {
   }, [id, navigate]);
 
   const handleSave = async () => {
-    if (!id) return;
     setSaving(true);
+    setSuccessMessage(null);
     try {
       const updates: any = {
         status: status,
@@ -97,9 +96,6 @@ const AdminInterventionDetail = () => {
 
       if (error) throw error;
       
-      // ✅ AUDIT LOG
-      await logAction('UPDATE', 'interventions', id, updates);
-
       // Recharger les données locales pour afficher les noms corrects (prestataire)
       const { data } = await supabase
           .from('interventions')
@@ -108,11 +104,14 @@ const AdminInterventionDetail = () => {
           .single();
           
       setIntervention((prev: any) => ({...prev, ...data}));
-      toast.success("Modifications enregistrées avec succès !");
+      
+      // Message de succès avec auto-hide
+      setSuccessMessage("Modifications enregistrées avec succès !");
+      setTimeout(() => setSuccessMessage(null), 3000);
 
     } catch (error) {
       console.error("Erreur sauvegarde:", error);
-      toast.error("Erreur lors de la sauvegarde.");
+      alert("Erreur lors de la sauvegarde.");
     } finally {
       setSaving(false);
     }
@@ -190,6 +189,12 @@ const AdminInterventionDetail = () => {
             </div>
 
             <div className="mt-6 flex flex-col items-end gap-2">
+              {successMessage && (
+                <div className="text-green-600 text-sm font-medium flex items-center gap-1 animate-in fade-in slide-in-from-bottom-2">
+                  <CheckCircle className="w-4 h-4" />
+                  {successMessage}
+                </div>
+              )}
               <button 
                 onClick={handleSave}
                 disabled={saving}
