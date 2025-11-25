@@ -1,8 +1,8 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, MapPin, Search, Trash2, Home, User, X, Loader2, Pencil } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { Profile } from '../../types';
+import { toast } from 'sonner';
 
 // Type étendu pour l'affichage
 interface LogementWithClient {
@@ -68,6 +68,7 @@ const AdminLogements = () => {
       setClients(clientsData || []);
     } catch (error) {
       console.error('Erreur chargement:', error);
+      toast.error('Erreur chargement des données');
     } finally {
       setLoading(false);
     }
@@ -112,7 +113,7 @@ const AdminLogements = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.client_id) {
-      alert("Veuillez sélectionner un client propriétaire.");
+      toast.error("Veuillez sélectionner un client propriétaire.");
       return;
     }
     
@@ -126,6 +127,7 @@ const AdminLogements = () => {
           .eq('id', editingId);
         
         if (error) throw error;
+        toast.success("Logement modifié avec succès");
       } else {
         // MODE CRÉATION
         const { error } = await supabase
@@ -133,6 +135,7 @@ const AdminLogements = () => {
           .insert([formData]);
 
         if (error) throw error;
+        toast.success("Logement créé avec succès");
       }
 
       // Reset et rechargement
@@ -140,7 +143,7 @@ const AdminLogements = () => {
       await fetchData();
     } catch (error: any) {
       console.error("Erreur sauvegarde:", error);
-      alert("Erreur lors de la sauvegarde: " + error.message);
+      toast.error("Erreur lors de la sauvegarde: " + error.message);
     } finally {
       setSubmitting(false);
     }
@@ -154,9 +157,10 @@ const AdminLogements = () => {
       const { error } = await supabase.from('logements').delete().eq('id', id);
       if (error) throw error;
       setLogements(prev => prev.filter(l => l.id !== id));
+      toast.success("Logement supprimé");
     } catch (error) {
       console.error("Erreur suppression:", error);
-      alert("Impossible de supprimer.");
+      toast.error("Impossible de supprimer le logement");
     }
   };
 

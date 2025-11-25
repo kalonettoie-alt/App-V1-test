@@ -1,9 +1,9 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TrendingUp, Users, Home, Loader2, Plus, X, Calendar, MapPin, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { InterventionStatus, InterventionType } from '../../types';
 import { supabase } from '../../services/supabase';
+import { toast } from 'sonner';
 
 // Mapping des couleurs statiques pour éviter les bugs de purge CSS Tailwind
 const STAT_THEMES: Record<string, { bg: string, icon: string }> = {
@@ -212,7 +212,7 @@ const AdminDashboard = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.logement_id || !formData.date) {
-      alert("Veuillez remplir les champs obligatoires.");
+      toast.error("Veuillez remplir les champs obligatoires.");
       return;
     }
 
@@ -250,10 +250,11 @@ const AdminDashboard = () => {
       
       // Rafraîchir le tableau
       await fetchDashboardData();
+      toast.success('Intervention créée avec succès');
 
     } catch (error: any) {
       console.error("Erreur création intervention:", error);
-      alert("Erreur : " + error.message);
+      toast.error("Erreur : " + error.message);
     } finally {
       setSubmitting(false);
     }

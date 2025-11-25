@@ -17,6 +17,11 @@ const AdminInterventions = () => {
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const ITEMS_PER_PAGE = 50;
+
   // Synchronisation avec l'URL
   useEffect(() => {
     const dateParam = searchParams.get('date');
@@ -38,17 +43,19 @@ const AdminInterventions = () => {
           logement:logements(name, city),
           client:profiles!interventions_client_id_fkey(full_name),
           prestataire:profiles!interventions_prestataire_id_fkey(full_name)
-        `)
-        .order('date', { ascending: false });
+        `, { count: 'exact' }) // ✅ Compte le total
+        .order('date', { ascending: false })
+        .range(page * ITEMS_PER_PAGE, (page + 1) * ITEMS_PER_PAGE - 1); // ✅ Pagination
 
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
 
       if (error) throw error;
       setInterventions(data || []);
+      setTotalCount(count || 0);
     } catch (error) {
       console.error('Erreur chargement interventions:', error);
     } finally {
@@ -58,7 +65,7 @@ const AdminInterventions = () => {
 
   useEffect(() => {
     fetchInterventions();
-  }, [statusFilter]);
+  }, [statusFilter, page]); // ✅ Refetch quand page ou filtre change
 
   // Gestion du nettoyage du filtre date
   const clearDateFilter = () => {
@@ -163,7 +170,10 @@ const AdminInterventions = () => {
                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <select 
                     value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setPage(0); // Reset pagination on filter change
+                    }}
                     className="w-full lg:w-48 pl-9 pr-8 h-10 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none appearance-none cursor-pointer"
                 >
                     <option value="all">Tous les statuts</option>
@@ -280,8 +290,31 @@ const AdminInterventions = () => {
         </div>
         )}
         
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 text-xs text-gray-500 flex justify-between items-center">
-            <span>Affichage de {filteredInterventions.length} résultats</span>
+        {/* Pagination Controls */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-between items-center">
+          <span className="text-xs text-gray-500">
+            Affichage de {page * ITEMS_PER_PAGE + 1} à {Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)} sur {totalCount} résultats
+          </span>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-3 py-1 text-sm bg-white border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Précédent
+            </button>
+            <span className="px-3 py-1 text-sm text-gray-700">
+              Page {page + 1} / {Math.ceil(totalCount / ITEMS_PER_PAGE) || 1}
+            </span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={(page + 1) * ITEMS_PER_PAGE >= totalCount}
+              className="px-3 py-1 text-sm bg-white border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Suivant
+            </button>
+          </div>
         </div>
       </div>
     </div>

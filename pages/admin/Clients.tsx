@@ -1,5 +1,4 @@
-
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Users, Search, Loader2, Mail, Phone, MapPin, Edit, Save, X, TrendingUp, Home, Euro, Eye } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 import { InterventionStatus } from '../../types';
@@ -20,51 +19,35 @@ const AdminClients = () => {
   const fetchClients = async () => {
     setLoading(true);
     try {
-      // ÉTAPE 1 : Récupérer les profils Clients
-      const { data: profilesData, error: profilesError } = await supabase
+      // ✅ UNE SEULE REQUÊTE avec jointures + agrégation pour éviter le N+1
+      const { data: clientsData, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          logements:logements(id, name, address, city),
+          interventions:interventions(
+            id,
+            status,
+            prix_client_ttc
+          )
+        `)
         .eq('role', 'client')
         .order('full_name', { ascending: true });
 
-      if (profilesError) throw profilesError;
+      if (error) throw error;
 
-      // ÉTAPE 2 : Récupérer tous les logements
-      const { data: logementsData, error: logError } = await supabase
-        .from('logements')
-        .select('*');
-        
-      if (logError) throw logError;
-
-      // ÉTAPE 3 : Récupérer les interventions (pour le financier)
-      const { data: interventionsData, error: intError } = await supabase
-        .from('interventions')
-        .select('client_id, prix_client_ttc, status');
-
-      if (intError) throw intError;
-
-      const allLogements = logementsData || [];
-      const allInterventions = interventionsData || [];
-
-      // ÉTAPE 4 : Enrichissement des données
-      const enrichedData = (profilesData || []).map(c => {
-        // Logements du client
-        const myLogements = allLogements.filter((l: any) => l.client_id === c.id);
-        
-        // Interventions du client
-        const myInterventions = allInterventions.filter((i: any) => i.client_id === c.id);
-        
-        // Calcul Total Dépensé (Uniquement sur interventions terminées ou acceptées)
-        const totalSpent = myInterventions
+      // Enrichissement côté client (unavoidable pour calculs avec données imbriquées complexes)
+      const enrichedData = (clientsData || []).map((client: any) => {
+        const totalSpent = (client.interventions || [])
           .filter((i: any) => i.status !== InterventionStatus.A_ATTRIBUER)
           .reduce((sum: number, i: any) => sum + (i.prix_client_ttc || 0), 0);
 
         return {
-          ...c,
-          logements: myLogements,
+          ...client,
+          logements: client.logements || [], // Assurer que c'est un tableau
           stats: {
-            countLogements: myLogements.length,
-            countInterventions: myInterventions.length,
+            countLogements: (client.logements || []).length,
+            countInterventions: (client.interventions || []).length,
             totalSpent
           }
         };
